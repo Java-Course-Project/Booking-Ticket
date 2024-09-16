@@ -6,23 +6,24 @@ import org.example.booking.ticket.exception.DataInvalidException;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Repository
 public class UserRepository implements CrudRepository<User, UUID> {
-    private static final Set<User> users = new CopyOnWriteArraySet<>();
+    private static final Map<UUID, User> users = new ConcurrentHashMap<>();
 
     @Override
     public User findById(UUID uuid) {
-        return users.stream().filter(e -> e.getId().equals(uuid)).map(User::new).findFirst().orElse(null);
+        return new User(users.get(uuid));
     }
 
     @Override
     public List<User> findAll() {
-        return new ArrayList<>(users.stream().map(User::new).toList());
+        return new ArrayList<>(users.values().stream().map(User::new).toList());
     }
 
     @Override
@@ -33,15 +34,17 @@ public class UserRepository implements CrudRepository<User, UUID> {
 
         DatabaseLocking.acquireTableLock(User.class);
         try {
-            for (User u : users) {
-                if (u.getId().equals(user.getId())) {
-                    throw new DataInvalidException("User id already exists");
-                }
+            Collection<User> existedUsers = users.values();
+            if (users.containsKey(user.getId())) {
+                throw new DataInvalidException("User id already exists");
+            }
+
+            for (User u : existedUsers) {
                 if (u.getName().equals(user.getName())) {
                     throw new DataInvalidException("User name already exists");
                 }
             }
-            users.add(user);
+            users.put(user.getId(), user);
         } finally {
             DatabaseLocking.releaseTableLock(User.class);
         }
@@ -52,7 +55,7 @@ public class UserRepository implements CrudRepository<User, UUID> {
     public void update(User user) {
         DatabaseLocking.acquireTableLock(User.class);
         try {
-            User existed = users.stream().filter(e -> e.getId().equals(user.getId())).findFirst().orElse(null);
+            User existed = users.get(user.getId());
             if (existed == null) {
                 throw new DataInvalidException("User not found");
             }

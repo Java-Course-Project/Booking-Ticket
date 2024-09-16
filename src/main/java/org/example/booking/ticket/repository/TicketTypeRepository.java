@@ -8,22 +8,22 @@ import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Repository
 public class TicketTypeRepository implements CrudRepository<TicketType, UUID> {
-    private static final Set<TicketType> ticketTypes = new CopyOnWriteArraySet<>();
+    private static final Map<UUID, TicketType> ticketTypes = new ConcurrentHashMap<>();
 
     @Override
     public TicketType findById(UUID id) {
-        return ticketTypes.stream().filter(e -> e.getId().equals(id)).map(TicketType::new).findFirst().orElse(null);
+        return new TicketType(ticketTypes.get(id));
     }
 
     @Override
     public List<TicketType> findAll() {
-        return new ArrayList<>(ticketTypes.stream().map(TicketType::new).toList());
+        return new ArrayList<>(ticketTypes.values().stream().map(TicketType::new).toList());
     }
 
     @Override
@@ -34,12 +34,10 @@ public class TicketTypeRepository implements CrudRepository<TicketType, UUID> {
 
         DatabaseLocking.acquireTableLock(TicketType.class);
         try {
-            for (TicketType type : ticketTypes) {
-                if (type.getId().equals(ticketType.getId())) {
-                    throw new DataInvalidException("Ticket type id already exists");
-                }
+            if (ticketTypes.containsKey(ticketType.getId())) {
+                throw new DataInvalidException("TicketType with id " + ticketType.getId() + " already exists");
             }
-            ticketTypes.add(ticketType);
+            ticketTypes.put(ticketType.getId(), ticketType);
         } finally {
             DatabaseLocking.releaseTableLock(TicketType.class);
         }
@@ -54,7 +52,7 @@ public class TicketTypeRepository implements CrudRepository<TicketType, UUID> {
 
         DatabaseLocking.acquireTableLock(TicketType.class);
         try {
-            TicketType existed = ticketTypes.stream().filter(e -> e.getId().equals(ticketType.getId())).findFirst().orElse(null);
+            TicketType existed = ticketTypes.get(ticketType.getId());
             if (existed == null) {
                 throw new DataInvalidException("Ticket id not exists");
             }

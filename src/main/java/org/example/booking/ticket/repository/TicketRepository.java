@@ -6,14 +6,16 @@ import org.example.booking.ticket.entity.TicketType;
 import org.example.booking.ticket.exception.DataInvalidException;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Repository
 public class TicketRepository implements CrudRepository<Ticket, UUID> {
-    private static final Set<Ticket> tickets = new CopyOnWriteArraySet<>();
+    private static final Map<UUID, Ticket> tickets = new ConcurrentHashMap<>();
     private final TicketTypeRepository ticketTypeRepository;
 
     public TicketRepository(TicketTypeRepository ticketTypeRepository) {
@@ -22,12 +24,12 @@ public class TicketRepository implements CrudRepository<Ticket, UUID> {
 
     @Override
     public Ticket findById(UUID uuid) {
-        return tickets.stream().filter(e -> e.getId().equals(uuid)).map(Ticket::new).findFirst().orElse(null);
+        return new Ticket(tickets.get(uuid));
     }
 
     @Override
     public List<Ticket> findAll() {
-        return tickets.stream().map(Ticket::new).toList();
+        return new ArrayList<>(tickets.values().stream().map(Ticket::new).toList());
     }
 
     @Override
@@ -40,11 +42,12 @@ public class TicketRepository implements CrudRepository<Ticket, UUID> {
         DatabaseLocking.acquireTableLock(Ticket.class);
         DatabaseLocking.acquireTableLock(TicketType.class);
         try {
-            for (Ticket t : tickets) {
-                if (t.getId().equals(ticket.getId())) {
-                    throw new DataInvalidException("Ticket id already exists");
-                }
+            Collection<Ticket> existingTickets = tickets.values();
+            if (tickets.containsKey(ticket.getId())) {
+                throw new DataInvalidException("Ticket id already exists");
+            }
 
+            for (Ticket t : existingTickets) {
                 if (t.getSection() == ticket.getSection() && t.getSeat() == ticket.getSeat() && t.getRow() == ticket.getRow()) {
                     throw new DataInvalidException("Ticket seat not available");
                 }
@@ -53,7 +56,8 @@ public class TicketRepository implements CrudRepository<Ticket, UUID> {
             if (ticketTypeRepository.findById(ticket.getTicketTypeId()) == null) {
                 throw new DataInvalidException("Ticket type id not exists");
             }
-            tickets.add(ticket);
+
+            tickets.put(ticket.getId(), ticket);
         } finally {
             DatabaseLocking.releaseTableLock(Ticket.class);
             DatabaseLocking.releaseTableLock(TicketType.class);
@@ -69,7 +73,7 @@ public class TicketRepository implements CrudRepository<Ticket, UUID> {
         DatabaseLocking.acquireTableLock(Ticket.class);
         DatabaseLocking.acquireTableLock(TicketType.class);
         try {
-            Ticket existed = tickets.stream().filter(e -> e.getId().equals(ticket.getId())).findFirst().orElse(null);
+            Ticket existed = tickets.get(ticket.getId());
             if (existed == null) {
                 throw new DataInvalidException("Ticket id not exists");
             }
@@ -87,7 +91,7 @@ public class TicketRepository implements CrudRepository<Ticket, UUID> {
     }
 
     public Ticket findByLocation(long section, long seat, long row) {
-        return tickets.stream().filter(e -> e.getSection() == section && e.getSeat() == seat && e.getRow() == row).map(Ticket::new)
+        return tickets.values().stream().filter(e -> e.getSection() == section && e.getSeat() == seat && e.getRow() == row).map(Ticket::new)
                       .findFirst().orElse(null);
     }
 }
