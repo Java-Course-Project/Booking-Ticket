@@ -52,7 +52,6 @@ public class UserServiceImpl implements UserService {
 
 	@Override
 	public void buyTicket(UUID ticketId, UUID userId) {
-		log.info("User {} buying ticket {}", userId, ticketId);
 		DatabaseLocking.acquireTableLock(User.class);
 		DatabaseLocking.acquireTableLock(Ticket.class);
 		DatabaseLocking.acquireTableLock(TicketType.class);
@@ -86,10 +85,6 @@ public class UserServiceImpl implements UserService {
 
 			userRepository.update(user);
 			ticketRepository.update(ticket);
-			log.info("User {} bought ticket {}", userId, ticketId);
-		} catch (RuntimeException e) {
-			log.error("User {} bought ticket {} failed: {}", userId, ticketId, e.getMessage());
-			throw e;
 		} finally {
 			DatabaseLocking.releaseTableLock(User.class);
 			DatabaseLocking.releaseTableLock(Ticket.class);
